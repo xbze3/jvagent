@@ -7,6 +7,8 @@ This module provides the prompt templates used by PersonaAction:
 - DSPy signature docstring (single source of truth)
 """
 
+from typing import Any, Dict, List, Optional
+
 # DSPy Signature Docstring (single source of truth for PersonaResponse)
 # This docstring is used by the PersonaResponse DSPy signature
 # Can be overridden via action class attribute for runtime customization
@@ -68,7 +70,9 @@ Refer to the user as '{user}'. Current date/time: {date} at {time}.
 Generate a natural response based on:
 1. **Directives**: What to accomplish (execute naturally within your persona)
 2. **Parameters**: Conditional guidance (apply when conditions match)
-3. **Interpretation**: Pre-analyzed user intent (context only)
+3. **Active Interviews**: Current state of ongoing structured conversations
+4. **Tool Results**: Data from executed tools (when available)
+5. **Interpretation**: Pre-analyzed user intent (context only)
 
 **Core Principles:**
 - Execute directives naturally as {agent_name} would—your identity governs style and tone
@@ -78,6 +82,10 @@ Generate a natural response based on:
 - End cleanly without unnecessary closings unless the conversation is finished
 
 {directives_section}
+
+{active_interviews_section}
+
+{tool_results_section}
 
 {interpretation_section}
 
@@ -97,6 +105,8 @@ Generate a natural response based on:
 
 - Execute all directives naturally within your persona
 - Apply all applicable parameters where conditions match
+- Follow active interview state instructions when interviews are running
+- Use tool results naturally when available
 - Avoid repetition—check conversation history for uniqueness
 - Match channel-appropriate tone and formatting
 - Present knowledge as inherent to you
@@ -263,6 +273,65 @@ Conditional guidance for executing directives:
 """
 
 # ============================================================================
+# Matched Parameters Section (Phase 5: Context-Managed Prompting)
+# ============================================================================
+
+MATCHED_PARAMETERS_SECTION_PROMPT = """### PARAMETERS (matched for this turn)
+
+These parameters were selected as relevant to the current context:
+
+{matched_parameter_list}
+
+**Application Rules:**
+- These were pre-filtered based on current context—apply ALL of them
+- Parameters specify conditional guidance that applies when their conditions match
+- If multiple parameters apply, satisfy all (prioritize most specific if conflicting)
+"""
+
+NO_MATCHED_PARAMETERS_SUB_PROMPT = """### PARAMETERS
+No specific parameters matched the current context.
+Apply general conversational principles and directives."""
+
+# ============================================================================
+# Active Interviews Section (Phase 5: Context-Managed Prompting)
+# ============================================================================
+
+ACTIVE_INTERVIEWS_SECTION_PROMPT = """### ACTIVE INTERVIEWS
+
+You are currently managing {interview_count} active interview(s):
+
+{interview_states_list}
+
+**Interview Management:**
+- Each interview has its own state and flow
+- Follow the current state instruction for each active interview
+- Interviews can coexist—respond appropriately to all active contexts
+- State instructions guide the conversation flow within each interview
+"""
+
+NO_ACTIVE_INTERVIEWS_SUB_PROMPT = """### ACTIVE INTERVIEWS
+No interviews are currently active."""
+
+# ============================================================================
+# Tool Results Section (Phase 6: Parameter-Bound Tools)
+# ============================================================================
+
+TOOL_RESULTS_SECTION_PROMPT = """### TOOL RESULTS
+
+Results from tools executed this turn:
+
+{tool_results_list}
+
+**Usage:**
+- These results provide data to inform your response
+- Reference tool results naturally when relevant
+- Do not expose tool execution details to the user
+"""
+
+NO_TOOL_RESULTS_SUB_PROMPT = """### TOOL RESULTS
+No tools were executed this turn."""
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 
@@ -322,6 +391,92 @@ def format_conditional_section(content: str, condition: bool = True) -> str:
     if not condition or not content or not content.strip():
         return ""
     return content.strip()
+
+
+def format_matched_parameters_section(matched_parameters: List[dict]) -> str:
+    """Format matched parameters section for the prompt.
+    
+    Args:
+        matched_parameters: List of parameters that matched this turn
+    
+    Returns:
+        Formatted section string or empty string
+    """
+    if not matched_parameters:
+        return NO_MATCHED_PARAMETERS_SUB_PROMPT
+    
+    param_lines = []
+    for i, param in enumerate(matched_parameters, 1):
+        param_lines.append(format_parameter(param, index=i))
+    
+    return MATCHED_PARAMETERS_SECTION_PROMPT.format(
+        matched_parameter_list="\n\n".join(param_lines)
+    )
+
+
+def format_active_interviews_section(active_interview_states: List[Dict[str, Any]]) -> str:
+    """Format active interviews section for the prompt.
+    
+    Args:
+        active_interview_states: List of active interview states, each with:
+            - interview_type: Interview class name
+            - state: Current state (ACTIVE, REVIEW, etc.)
+            - directive: Current state instruction
+    
+    Returns:
+        Formatted section string or empty string
+    """
+    if not active_interview_states:
+        return NO_ACTIVE_INTERVIEWS_SUB_PROMPT
+    
+    state_lines = []
+    for i, state_info in enumerate(active_interview_states, 1):
+        interview_type = state_info.get("interview_type", "Unknown")
+        state = state_info.get("state", "ACTIVE")
+        directive = state_info.get("directive", "Continue interview")
+        
+        state_lines.append(
+            f"{i}. **{interview_type}** (State: {state})\n"
+            f"   Current instruction: {directive}"
+        )
+    
+    return ACTIVE_INTERVIEWS_SECTION_PROMPT.format(
+        interview_count=len(active_interview_states),
+        interview_states_list="\n\n".join(state_lines)
+    )
+
+
+def format_tool_results_section(tool_results: List[Dict[str, Any]]) -> str:
+    """Format tool results section for the prompt.
+    
+    Args:
+        tool_results: List of tool results, each with:
+            - tool_id: Tool identifier
+            - result: Tool result data
+            - metadata: Optional metadata
+    
+    Returns:
+        Formatted section string or empty string
+    """
+    if not tool_results:
+        return NO_TOOL_RESULTS_SUB_PROMPT
+    
+    result_lines = []
+    for i, tool_result in enumerate(tool_results, 1):
+        tool_id = tool_result.get("tool_id", "unknown")
+        result = tool_result.get("result", {})
+        
+        # Extract data from result
+        if isinstance(result, dict):
+            data = result.get("data", result)
+        else:
+            data = result
+        
+        result_lines.append(f"{i}. **{tool_id}**: {data}")
+    
+    return TOOL_RESULTS_SECTION_PROMPT.format(
+        tool_results_list="\n".join(result_lines)
+    )
 
 
 def get_channel_directive(channel: str) -> str:

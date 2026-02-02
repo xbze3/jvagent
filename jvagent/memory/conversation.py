@@ -64,6 +64,12 @@ class Conversation(DeferredSaveMixin, Node):
     context: Dict[str, Any] = attribute(
         default_factory=dict, description="Conversation context dictionary"
     )
+    
+    # Active interviews tracking (Phase 4: Multi-Interview Coexistence)
+    active_interviews: Dict[str, str] = attribute(
+        default_factory=dict,
+        description="Maps interview_type (class name) to active InterviewSession.id. Enables multiple coexisting interviews."
+    )
 
     async def get_agent(self) -> Optional[Any]:
         """Get the Agent node this Conversation belongs to.
@@ -240,6 +246,58 @@ class Conversation(DeferredSaveMixin, Node):
                     self.last_interaction_id = None
 
         await self.save()
+    
+    # Active interviews management (Phase 4: Multi-Interview Coexistence)
+    
+    def add_active_interview(self, interview_type: str, session_id: str) -> None:
+        """Add an active interview session.
+        
+        Args:
+            interview_type: Interview class name (e.g., 'SignupInterviewAction')
+            session_id: InterviewSession.id for this interview
+        """
+        self.active_interviews[interview_type] = session_id
+    
+    def remove_active_interview(self, interview_type: str) -> Optional[str]:
+        """Remove an active interview session.
+        
+        Args:
+            interview_type: Interview class name
+        
+        Returns:
+            The session_id that was removed, or None if not found
+        """
+        return self.active_interviews.pop(interview_type, None)
+    
+    def get_active_interview_session_id(self, interview_type: str) -> Optional[str]:
+        """Get the session ID for an active interview.
+        
+        Args:
+            interview_type: Interview class name
+        
+        Returns:
+            InterviewSession.id if interview is active, None otherwise
+        """
+        return self.active_interviews.get(interview_type)
+    
+    def is_interview_active(self, interview_type: str) -> bool:
+        """Check if an interview is currently active.
+        
+        Args:
+            interview_type: Interview class name
+        
+        Returns:
+            True if interview is active, False otherwise
+        """
+        return interview_type in self.active_interviews
+    
+    def get_all_active_interview_types(self) -> List[str]:
+        """Get list of all active interview types.
+        
+        Returns:
+            List of interview class names that are currently active
+        """
+        return list(self.active_interviews.keys())
 
     async def create_interaction(
         self,

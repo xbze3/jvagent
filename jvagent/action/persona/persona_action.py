@@ -26,6 +26,9 @@ from jvagent.action.persona.prompts import (
     format_conditional_section,
     format_parameter,
     get_channel_directive,
+    format_matched_parameters_section,
+    format_active_interviews_section,
+    format_tool_results_section,
 )
 from jvagent.memory import Interaction
 
@@ -200,9 +203,19 @@ class PersonaAction(Action):
             if interaction.add_parameters(persona_parameters_to_add, persona_action_name):
                 await interaction.save()
 
-        # Get unexecuted directives and parameters (now includes persona parameters)
+        # Get unexecuted directives
         applicable_directives = interaction.get_unexecuted_directives()
-        applicable_parameters = interaction.get_unexecuted_parameters()
+        
+        # Get parameters: Use matched_parameters if available (Phase 5), else fall back to unexecuted
+        matched_params = interaction.get_matched_parameters()
+        if matched_params:
+            # Context-managed prompting: Use only matched parameters
+            applicable_parameters = matched_params
+            logger.debug(f"PersonaAction.respond: Using {len(matched_params)} matched parameters")
+        else:
+            # Legacy behavior: Use all unexecuted parameters
+            applicable_parameters = interaction.get_unexecuted_parameters()
+            logger.debug(f"PersonaAction.respond: Using {len(applicable_parameters)} unexecuted parameters (no matching performed)")
 
         # Check for existing response to avoid repetition (multi-call awareness)
         if interaction.response:
@@ -214,12 +227,11 @@ class PersonaAction(Action):
                 return interaction.response
 
         # Validate that there are directives and/or parameters to proceed
-        # applicable_parameters now includes persona parameters from the interaction
         if not (applicable_directives or applicable_parameters):
             raise ValueError(
                 "PersonaAction.respond: Cannot proceed - no directives or parameters found. "
                 "At least one of the following must be present: "
-                "unexecuted directives from other actions, unexecuted parameters from other actions, "
+                "unexecuted directives from other actions, matched parameters, unexecuted parameters, "
                 "or PersonaAction's own parameters."
             )
 
@@ -434,6 +446,7 @@ class PersonaAction(Action):
         interaction: Interaction,
         applicable_directives: List[Dict[str, Any]],
         applicable_parameters: List[Dict[str, Any]],
+        visitor: Optional[Any] = None,
     ) -> str:
         """Compose the system prompt using the consolidated template.
 
@@ -447,6 +460,8 @@ class PersonaAction(Action):
         - Context Evaluation (always included)
         - Directives (conditionally included)
         - Parameters (conditionally included)
+        - Active Interviews (conditionally included - Phase 5)
+        - Tool Results (conditionally included - Phase 6)
         - Channel Formatting (conditionally included)
 
         Args:
@@ -546,6 +561,12 @@ class PersonaAction(Action):
         channel_directive = get_channel_directive(interaction.channel or "default")
         if channel_directive:
             channel_formatting_section = f"### CHANNEL FORMATTING\n{channel_directive}"
+        
+        # Build active interviews section (Phase 5: Context-Managed Prompting)
+        active_interviews_section = await self._build_active_interviews_section(interaction, visitor)
+        
+        # Build tool results section (Phase 6: Parameter-Bound Tools)
+        tool_results_section = self._build_tool_results_section(interaction)
 
         # Format all conditional sections
         interpretation_section = format_conditional_section(interpretation_section, bool(interpretation_section))
@@ -553,27 +574,135 @@ class PersonaAction(Action):
         parameters_section = format_conditional_section(parameters_section, bool(parameters_section))
         channel_formatting_section = format_conditional_section(channel_formatting_section, bool(channel_formatting_section))
         continuation_guidance = format_conditional_section(continuation_guidance, bool(continuation_guidance))
+        active_interviews_section = format_conditional_section(active_interviews_section, bool(active_interviews_section))
+        tool_results_section = format_conditional_section(tool_results_section, bool(tool_results_section))
 
         # Build and return the final prompt using self.system_prompt (which defaults to SYSTEM_PROMPT_TEMPLATE
         # but can be overridden by agent-specific configurations)
         # Fall back to SYSTEM_PROMPT_TEMPLATE if self.system_prompt is empty (shouldn't happen with default)
         prompt_template = self.system_prompt if self.system_prompt else SYSTEM_PROMPT_TEMPLATE
-        return prompt_template.format(
-            agent_name=self.persona_name,
-            agent_description=self.persona_description,
-            agent_capabilities=capabilities_str,
-            user=await self._get_user_display_name(interaction),
-            date=date_str,
-            time=time_str,
-            interpretation_section=interpretation_section,
-            revision_mechanism=revision_mechanism,
-            prioritization_instructions=prioritization_instructions,
-            context_evaluation=context_evaluation,
-            directives_section=directives_section,
-            parameters_section=parameters_section,
-            channel_formatting_section=channel_formatting_section,
-            continuation_guidance=continuation_guidance,
+        
+        # Check if template supports new sections (backward compatible)
+        supports_new_sections = (
+            "{active_interviews_section}" in prompt_template and 
+            "{tool_results_section}" in prompt_template
         )
+        
+        if supports_new_sections:
+            return prompt_template.format(
+                agent_name=self.persona_name,
+                agent_description=self.persona_description,
+                agent_capabilities=capabilities_str,
+                user=await self._get_user_display_name(interaction),
+                date=date_str,
+                time=time_str,
+                interpretation_section=interpretation_section,
+                revision_mechanism=revision_mechanism,
+                prioritization_instructions=prioritization_instructions,
+                context_evaluation=context_evaluation,
+                directives_section=directives_section,
+                parameters_section=parameters_section,
+                active_interviews_section=active_interviews_section,
+                tool_results_section=tool_results_section,
+                channel_formatting_section=channel_formatting_section,
+                continuation_guidance=continuation_guidance,
+            )
+        else:
+            # Fallback for old templates without new sections
+            return prompt_template.format(
+                agent_name=self.persona_name,
+                agent_description=self.persona_description,
+                agent_capabilities=capabilities_str,
+                user=await self._get_user_display_name(interaction),
+                date=date_str,
+                time=time_str,
+                interpretation_section=interpretation_section,
+                revision_mechanism=revision_mechanism,
+                prioritization_instructions=prioritization_instructions,
+                context_evaluation=context_evaluation,
+                directives_section=directives_section,
+                parameters_section=parameters_section,
+                channel_formatting_section=channel_formatting_section,
+                continuation_guidance=continuation_guidance,
+            )
+
+    async def _build_active_interviews_section(
+        self,
+        interaction: Interaction,
+        visitor: Optional[Any],
+    ) -> str:
+        """Build active interviews section from conversation state.
+        
+        Args:
+            interaction: Current interaction
+            visitor: Optional visitor (for accessing conversation)
+        
+        Returns:
+            Formatted active interviews section string
+        """
+        if not visitor or not hasattr(visitor, "conversation"):
+            return ""
+        
+        conversation = visitor.conversation
+        if not conversation:
+            return ""
+        
+        # Get active interview types
+        active_types = conversation.get_all_active_interview_types()
+        if not active_types:
+            return ""
+        
+        # Collect state information for each active interview
+        active_interview_states = []
+        for interview_type in active_types:
+            session_id = conversation.get_active_interview_session_id(interview_type)
+            if not session_id:
+                continue
+            
+            # Try to load the session and get current state
+            try:
+                from jvagent.action.interview.core.session.interview_session import InterviewSession
+                session = await InterviewSession.get(session_id)
+                if session:
+                    # Get current directive from session (simplified for now)
+                    # In production, this would call DirectiveBuilder or similar
+                    state = session.state.value if hasattr(session.state, "value") else str(session.state)
+                    
+                    # Build a simple directive based on state
+                    if state == "ACTIVE":
+                        directive = f"Continue {interview_type} by asking the next question"
+                    elif state == "REVIEW":
+                        directive = f"Confirm collected information for {interview_type}"
+                    else:
+                        directive = f"Handle {state} state for {interview_type}"
+                    
+                    active_interview_states.append({
+                        "interview_type": interview_type,
+                        "state": state,
+                        "directive": directive,
+                    })
+            except Exception as e:
+                logger.debug(f"PersonaAction: Could not load interview session {session_id}: {e}")
+        
+        if not active_interview_states:
+            return ""
+        
+        return format_active_interviews_section(active_interview_states)
+    
+    def _build_tool_results_section(self, interaction: Interaction) -> str:
+        """Build tool results section from interaction.
+        
+        Args:
+            interaction: Current interaction
+        
+        Returns:
+            Formatted tool results section string
+        """
+        tool_results = interaction.get_tool_results()
+        if not tool_results:
+            return ""
+        
+        return format_tool_results_section(tool_results)
 
     async def _get_conversation_history(
         self,
@@ -924,7 +1053,7 @@ class PersonaAction(Action):
             response = await model_action.generate(
                 prompt=prompt,
                 stream=streaming,
-                system=await self._compose_prompt(interaction, applicable_directives, applicable_parameters),
+                system=await self._compose_prompt(interaction, applicable_directives, applicable_parameters, visitor),
                 history=conversation_history,
                 calling_action_name=self.get_class_name(),
                 model=self.model,

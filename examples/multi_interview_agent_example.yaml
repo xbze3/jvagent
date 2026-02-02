@@ -1,0 +1,84 @@
+# Example Agent with Multi-Interview Support and Parameter Matching
+#
+# This example demonstrates:
+# 1. InterviewAwareRouter with parameter matching enabled
+# 2. Multiple coexisting interviews with activation conditions
+# 3. Interview-scoped parameters
+# 4. Matched parameters (context-managed prompting)
+
+agent_id: multi_interview_example
+namespace: jvagent
+label: MultiInterviewAgent
+
+# ============================================================================
+# Persona Configuration
+# ============================================================================
+
+actions:
+  # Router with interview awareness and parameter matching
+  - entity: InterviewAwareRouter
+    label: interview_aware_router
+    weight: -100
+    enabled: true
+    enable_parameter_matching: true
+    parameter_matcher_strategy: "rule"
+    model_action_type: OpenAILanguageModelAction
+    model: gpt-4o-mini
+    anchors: []  # Router doesn't need anchors
+
+  # Signup Interview
+  - entity: SignupInterviewAction
+    label: signup_interview
+    weight: -40
+    enabled: true
+    activation_conditions:
+      - "user wants to sign up"
+      - "user wants to create an account"
+      - "user requests registration"
+    exclusive: false  # Can coexist with other interviews
+    anchors:
+      - "User wants to sign up or create account"
+      - "User provides signup information"
+      - "User confirms signup details"
+    parameters:
+      - condition: "User provides invalid email format"
+        response: "Politely explain the email format requirement"
+        match_mode: "matched"
+        interview_scope: "SignupInterviewAction"
+
+  # Profile Update Interview
+  - entity: ProfileUpdateInterviewAction
+    label: profile_interview
+    weight: -40
+    enabled: true
+    activation_conditions:
+      - "user wants to update profile"
+      - "user wants to change their information"
+    exclusive: false
+    anchors:
+      - "User wants to update their profile"
+      - "User provides profile information"
+
+  # Persona Action (responds with context-managed prompt)
+  - entity: PersonaAction
+    label: persona
+    weight: 100
+    enabled: true
+    persona_name: "Alex"
+    persona_description: "A helpful assistant that manages multiple tasks simultaneously"
+    persona_capabilities:
+      - "Help users sign up for accounts"
+      - "Assist with profile updates"
+      - "Answer general questions"
+    parameters:
+      - condition: "User asks about your capabilities"
+        response: "Explain what you can help with, mentioning multi-tasking ability"
+        match_mode: "always"  # Always included
+      
+      - condition: "User seems confused about multiple active processes"
+        response: "Clarify which process you're currently handling and offer to focus on one"
+        match_mode: "matched"  # Only when relevant
+      
+      - condition: "User requests to cancel all activities"
+        response: "Confirm which activities to cancel and proceed accordingly"
+        match_mode: "matched"

@@ -188,6 +188,24 @@ class InterviewInteractAction(InteractAction, ABC):
             "when collected by InteractRouter."
         ),
     )
+    
+    # Multi-interview coexistence (Phase 3: InteractRouter Modes and Interview Delegation)
+    activation_conditions: List[str] = attribute(
+        default_factory=list,
+        description=(
+            "Conditions that activate this interview (e.g., 'user wants to book a flight'). "
+            "When these conditions match and no active session exists, the interview can be started. "
+            "Used by InterviewAwareRouter or interview delegation logic. Empty list means manual activation only."
+        ),
+    )
+    
+    exclusive: bool = attribute(
+        default=False,
+        description=(
+            "If True, starting this interview deactivates other active interviews. "
+            "If False (default), multiple interviews can be active simultaneously."
+        ),
+    )
 
     # Model Configuration
     model_action_type: str = attribute(
@@ -591,13 +609,16 @@ class InterviewInteractAction(InteractAction, ABC):
     ) -> None:
         """Generate directive for COMPLETED state.
 
-        Delegates to DirectiveBuilder.
+        Delegates to DirectiveBuilder and removes interview from active_interviews.
 
         Args:
             session: Interview session
             visitor: InteractWalker
         """
         await self.directive_builder.generate_completed_directive(session, visitor)
+        
+        # Remove from active interviews (Phase 4: Multi-Interview Coexistence)
+        await self._deactivate_interview(session, visitor)
 
     async def _generate_cancelled_directive(
         self,
@@ -606,13 +627,44 @@ class InterviewInteractAction(InteractAction, ABC):
     ) -> None:
         """Generate directive for CANCELLED state.
 
-        Delegates to DirectiveBuilder.
+        Delegates to DirectiveBuilder and removes interview from active_interviews.
 
         Args:
             session: Interview session
             visitor: InteractWalker
         """
         await self.directive_builder.generate_cancelled_directive(session, visitor)
+        
+        # Remove from active interviews (Phase 4: Multi-Interview Coexistence)
+        await self._deactivate_interview(session, visitor)
+    
+    async def _deactivate_interview(
+        self,
+        session: InterviewSession,
+        visitor: "InteractWalker",
+    ) -> None:
+        """Remove interview from active_interviews when completed or cancelled.
+        
+        Args:
+            session: Interview session
+            visitor: InteractWalker
+        """
+        if not visitor or not hasattr(visitor, "interaction"):
+            return
+        
+        interaction = visitor.interaction
+        if not interaction:
+            return
+        
+        conversation = await interaction.get_conversation()
+        if not conversation:
+            return
+        
+        interview_type = self.get_class_name()
+        if conversation.is_interview_active(interview_type):
+            conversation.remove_active_interview(interview_type)
+            await conversation.save()
+            logger.info(f"{interview_type}: Removed from active interviews (state: {session.state})")
 
 
     async def _update_reachable_questions(
@@ -942,6 +994,16 @@ class InterviewInteractAction(InteractAction, ABC):
 
             # Attach to conversation
             await conversation.connect(session)
+            
+            # Register as active interview (Phase 4: Multi-Interview Coexistence)
+            conversation.add_active_interview(interview_type, session.id)
+            await conversation.save()
+            logger.info(f"{interview_type}: Registered as active interview")
+        elif not conversation.is_interview_active(interview_type):
+            # Session exists but not registered as active - register it
+            conversation.add_active_interview(interview_type, session.id)
+            await conversation.save()
+            logger.info(f"{interview_type}: Re-registered existing session as active")
 
         # Inject session in visitor for compatibility
         visitor.interview_session = session

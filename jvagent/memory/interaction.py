@@ -91,6 +91,18 @@ class Interaction(DeferredSaveMixin, Node):
     parameters: List[Dict[str, Any]] = attribute(
         default_factory=list, description="Applicable parameters for this interaction. Each entry should have 'action_name' and 'executed': bool keys"
     )
+    
+    # Matched parameters (from ParameterMatcher - Phase 1)
+    matched_parameters: List[Dict[str, Any]] = attribute(
+        default_factory=list, 
+        description="Parameters that matched this turn via ParameterMatcher. Subset of all parameters with match_mode='matched'"
+    )
+    
+    # Tool results (from parameter-bound tools - Phase 1)
+    tool_results: List[Dict[str, Any]] = attribute(
+        default_factory=list,
+        description="Results from parameter-bound tools executed this turn. Each entry: {tool_id, result, metadata}"
+    )
 
     # Streaming and observability
     streamed: bool = attribute(
@@ -275,6 +287,75 @@ class Interaction(DeferredSaveMixin, Node):
                 if self.add_directive(directive, action_name):
                     any_added = True
         return any_added
+    
+    def add_matched_parameter(self, parameter: Dict[str, Any]) -> bool:
+        """Add a matched parameter to the interaction.
+        
+        Args:
+            parameter: Parameter that matched this turn (should include match score/rationale if available)
+        
+        Returns:
+            True if added, False if invalid
+        """
+        if not parameter:
+            return False
+        self.matched_parameters.append(parameter)
+        return True
+    
+    def add_matched_parameters(self, parameters: List[Dict[str, Any]]) -> bool:
+        """Add multiple matched parameters to the interaction.
+        
+        Args:
+            parameters: List of parameters that matched this turn
+        
+        Returns:
+            True if any parameter was added, False if empty
+        """
+        if not parameters:
+            return False
+        
+        for parameter in parameters:
+            if parameter and isinstance(parameter, dict):
+                self.add_matched_parameter(parameter)
+        return len(parameters) > 0
+    
+    def add_tool_result(self, tool_id: str, result: Any, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """Add a tool result to the interaction.
+        
+        Args:
+            tool_id: Identifier of the tool that was executed
+            result: Result data from the tool
+            metadata: Optional metadata about the tool execution
+        
+        Returns:
+            True if added, False if invalid
+        """
+        if not tool_id:
+            return False
+        
+        entry = {
+            "tool_id": tool_id,
+            "result": result,
+            "metadata": metadata or {}
+        }
+        self.tool_results.append(entry)
+        return True
+    
+    def get_matched_parameters(self) -> List[Dict[str, Any]]:
+        """Get all matched parameters for this interaction.
+        
+        Returns:
+            List of matched parameters
+        """
+        return self.matched_parameters
+    
+    def get_tool_results(self) -> List[Dict[str, Any]]:
+        """Get all tool results for this interaction.
+        
+        Returns:
+            List of tool results
+        """
+        return self.tool_results
 
     def has_response(self) -> bool:
         """Check if the interaction has a response.
