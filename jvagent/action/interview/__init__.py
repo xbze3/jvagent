@@ -12,6 +12,7 @@ from .core.foundation.decorators import (
     input_validator,
     input_directive_override,
     on_interview_complete,
+    on_confirmation,
     branch_function,
 )
 

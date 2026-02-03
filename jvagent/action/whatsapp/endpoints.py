@@ -78,6 +78,8 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
         # Parse request data with error handling
         try:
             request_data = await request.json()
+            logger.warning(f"Raw request data:")
+            logger.warning(f"{request_data}")
             data = await whatsapp_action.api().parse_inbound_message(request_data)
         except ValidationError as e:
             logger.debug(f"Validation error parsing WhatsApp webhook request: {e}")
@@ -85,17 +87,16 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
         except Exception as e:
             logger.debug(f"Error parsing WhatsApp webhook request: {e}")
             data = None
-
-
-        # logger.info(f"Received WhatsApp webhook for agent {agent_id}: {data}")
         
         if not data or data.fromMe:
             return {"status": "received", "response": "Ignore message"}
 
-        # MessagePayload is a dataclass, access attributes directly
+        # logger.info(f"Received WhatsApp webhook for agent {agent_id}: {data}")
+
         utterance = data.body or data.caption
         utterance = utterance.strip() if utterance else None
         sender = data.sender
+        sender_name = data.sender_name
 
         # Validate sender - ignore status@broadcast messages completely
         if not sender or "status@broadcast" in sender or "status@broadcast" in data.receiver or sender == data.receiver:
@@ -103,7 +104,7 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
         
         # Check if this is a media message
         if data.message_type in ["image", "document", "video", "audio"] and data.media:
-            await _handle_media_message(data, sender, agent_id, whatsapp_action, utterance)
+            return await _handle_media_message(data, sender, agent_id, whatsapp_action, utterance)
         elif data.message_type in ["ptt"] and data.media:
             voice_result = await _handle_voice_message(data, sender, whatsapp_action)
             utterance = voice_result.get("transcript", "")
@@ -123,8 +124,11 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
         else:
             return {"status": "ignored", "response": "Ignore interaction"}
 
-        logger.debug(f"Processing utterance: {utterance}")
+        
+        if utterance and len(utterance) > whatsapp_action.utterance_max_length:
+            return {"status": "ignored", "response": "Utterance too long."}
 
+        logger.warning(f"Processing utterance: {utterance}")
         # Check if webhook should run in async mode (background task)
         # Default is False (synchronous) for Lambda compatibility
         use_async_mode = os.environ.get("WHATSAPP_WEBHOOK_ASYNC", "false").lower() == "true"
@@ -134,7 +138,7 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
             # Use this mode only for long-running servers, NOT for AWS Lambda
             logger.debug(f"Processing interaction asynchronously for {sender}")
             create_background_task(
-                _process_interaction_async(data, utterance, sender, agent_id, agent),
+                _process_interaction_async(data, utterance, sender, agent_id, agent, sender_name=sender_name),
                 name=f"whatsapp_interaction_{sender}"
             )
             return {"status": "received"}
@@ -142,7 +146,7 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
             # Sync mode (default): Await full interaction before returning
             # This ensures Lambda completes the full flow before freezing
             logger.debug(f"Processing interaction synchronously for {sender}")
-            await _process_interaction_async(data, utterance, sender, agent_id, agent)
+            await _process_interaction_async(data, utterance, sender, agent_id, agent, sender_name=sender_name)
             return {"status": "received"}
         
     except (ResourceNotFoundError, HTTPException):

@@ -125,6 +125,7 @@ async def create_whatsapp_walker(
     utterance: str,
     sender: str,
     data_dict: Dict[str, Any],
+    sender_name: Optional[str] = None,
 ) -> Optional[InteractWalker]:
     """Create an InteractWalker for WhatsApp interactions.
     
@@ -150,6 +151,7 @@ async def create_whatsapp_walker(
                 channel="whatsapp",
                 data=data_dict,
                 session_id=convo_obj.session_id,
+                user_name=sender_name,
                 stream=False,  # WhatsApp uses non-streaming mode
             )
         else:
@@ -159,6 +161,7 @@ async def create_whatsapp_walker(
                 channel="whatsapp",
                 data=data_dict,
                 user_id=sender,
+                user_name=sender_name,
                 stream=False,  # WhatsApp uses non-streaming mode
             )
     except ValidationError as e:
@@ -418,7 +421,12 @@ async def _handle_voice_message(data: Any, sender: str, whatsapp_action: Any) ->
 
 
 async def _process_interaction_async(
-    data: Any, utterance: str, sender: str, agent_id: str, agent: Any
+    data: Any,
+    utterance: str,
+    sender: str,
+    agent_id: str,
+    agent: Any,
+    sender_name: Optional[str] = None,
 ) -> None:
     """Process the interaction in the background with improved error handling.
     
@@ -454,9 +462,10 @@ async def _process_interaction_async(
     try:
         # Convert MessagePayload to dict for InteractWalker
         data_dict = _convert_message_payload_to_dict(data)
+        logger.warning("create_whatsapp_walker was called")
 
         # Create walker using helper function
-        walker = await create_whatsapp_walker(agent_id, utterance, sender, data_dict)
+        walker = await create_whatsapp_walker(agent_id, utterance, sender, data_dict, sender_name=sender_name)
         if not walker:
             return
             

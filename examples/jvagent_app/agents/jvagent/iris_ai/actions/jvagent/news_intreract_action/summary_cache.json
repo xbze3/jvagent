@@ -1,0 +1,42 @@
+{
+  "2026-01-21": {
+    "summary": "Recently, three individuals were charged for trafficking significant amounts of cocaine, while an illegal mining operation in the Essequibo River was shut down. In other news, a miner was shot during a robbery, and there are ongoing discussions about the election of the Opposition Leader amidst political tensions. The community is also buzzing about a new solar energy project in Region Ten.",
+    "links": [
+      "http://localhost:8000/api/n/three-charged-popk",
+      "http://localhost:8000/api/n/illegal-mining-l2fy",
+      "http://localhost:8000/api/n/three-charged-saft",
+      "http://localhost:8000/api/n/miner-shot-e05s",
+      "http://localhost:8000/api/n/solar-farms-ixp9"
+    ]
+  },
+  "2026-01-22": {
+    "summary": "In the news for Thu, 22 Jan 2026, political tensions are rising in Guyana as Nazar Mohamed calls for Nadir to apologize to Azruddin Mohamed, with WIN criticizing Nadir's actions. Meanwhile, the legality of cash grants to fishermen is questioned, and the government faces scrutiny over the appointment of a fugitive as Opposition Leader. Additionally, nearly 200 arrests were made in a cross-border operation targeting illegal activities.",
+    "links": [
+      "[Nadir Apology](http://localhost:8000/api/n/nazar-mohamed-bw4a)",
+      "[WIN Criticism](http://localhost:8000/api/n/win-blasts-kt5z)",
+      "[Cash Grants Legality](http://localhost:8000/api/n/goolsarran-questions-m1sh)",
+      "[Fugitive Opposition Leader](http://localhost:8000/api/n/ag-warns-v3hd)",
+      "[Cross-Border Arrests](http://localhost:8000/api/n/nearly-200-c8ye)",
+      "[Cross-Border Arrests](http://localhost:8000/api/n/198-arrests-q8eb)"
+    ]
+  },
+  "2026-01-23": {
+    "summary": "In the news for Fri, 23 Jan 2026, Guyana is making strides with a $7.2 billion loan from Japan to upgrade its water infrastructure. Meanwhile, the country is cracking down on illegal gold mining, with multiple arrests and equipment seizures. On a darker note, crime remains a concern, highlighted by a tragic collision that claimed three lives and ongoing issues with gang violence in schools.",
+    "links": [
+      "[Guyana Water Upgrade](http://localhost:8000/api/n/guyana-japan-v353)",
+      "[Illegal Gold Mining](http://localhost:8000/api/n/guyana-among-24xn)",
+      "[Illegal Mining Arrests](http://localhost:8000/api/n/members-of-27nx)",
+      "[Collision Incident](http://localhost:8000/api/n/three-killed-wem6)",
+      "[Gang Violence in Schools](http://localhost:8000/api/n/no-place-tovx)"
+    ]
+  },
+  "2026-01-26": {
+    "summary": "In the news for Mon, 26 Jan 2026, Guyana is buzzing with political activity as MPs gather to elect an Opposition Leader, while the Finance Minister unveils Budget 2026, aiming to kick-start development and address living costs. Meanwhile, crime remains a concern with recent arrests in assaults and robberies, and the government is pushing for clean energy initiatives to lead the energy transition.",
+    "links": [
+      "[Opposition Leader Election](http://localhost:8000/api/n/mps-gathering-lfm2)",
+      "[Budget 2026](http://localhost:8000/api/n/budget-2026-hx8o)",
+      "[Crime Arrests](http://localhost:8000/api/n/teenagers-arrested-rr08)",
+      "[Clean Energy Initiatives](http://localhost:8000/api/n/guyana-in-qis5)"
+    ]
+  }
+}

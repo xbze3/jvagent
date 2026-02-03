@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 # This is populated when @on_interview_complete decorated functions are defined
 _completion_handlers: Dict[str, Callable] = {}
 
+# Module-level registry for confirmation handlers (keyed by interview_type)
+# This is populated when @on_confirmation decorated functions are defined
+_confirmation_handlers: Dict[str, Callable] = {}
+
 # Module-level registries for decorator-registered handlers, validators, and directive overrides
 # Format: {(interview_type, question_name): function}
 _input_handler_registry: Dict[Tuple[str, str], Callable] = {}
@@ -267,10 +271,56 @@ def on_interview_complete(interview_type: str):
     return decorator
 
 
+def on_confirmation(interview_type: str):
+    """Decorator to register a confirmation handler for a specific interview type.
+
+    Confirmation handlers are called when a CONFIRMATION intent is detected in the REVIEW state,
+    before the default transition to COMPLETED occurs.
+    Use this to perform custom validation, trigger actions, or override the default completion flow.
+
+    Args:
+        interview_type: Class name of the InterviewInteractAction (e.g., 'SignupInterviewInteractAction')
+
+    Handler Signature:
+        The handler must accept three parameters:
+        - session: InterviewSession - The current interview session
+        - visitor: InteractWalker - The walker for accessing context and responding
+        - action: InteractAction - The action instance
+
+    Returns:
+        Optional[bool]:
+        - True: The handler has fully handled the confirmation. Default transition to COMPLETED is skipped.
+        - False or None: Default logic proceeds as usual (transition to COMPLETED).
+
+    Example:
+        @on_confirmation('SignupInterviewInteractAction')
+        async def handle_signup_confirmation(
+            session: InterviewSession,
+            visitor: InteractWalker,
+            action: InteractAction
+        ) -> Optional[bool]:
+            # Custom logic
+            if some_condition:
+                await action.respond(visitor, directives=["Please wait while we verify..."])
+                return True # Skip default completion
+            return False # Proceed to completion
+    """
+    def decorator(func: Callable) -> Callable:
+        # Register the handler in the module-level registry
+        _confirmation_handlers[interview_type] = func
+        return func
+    return decorator
+
+
 # Export registry access functions for InterviewInteractAction
 def get_completion_handler(interview_type: str) -> Optional[Callable]:
     """Get completion handler for an interview type."""
     return _completion_handlers.get(interview_type)
+
+
+def get_confirmation_handler(interview_type: str) -> Optional[Callable]:
+    """Get confirmation handler for an interview type."""
+    return _confirmation_handlers.get(interview_type)
 
 
 def get_input_handler(interview_type: str, question_name: str) -> Optional[Callable]:

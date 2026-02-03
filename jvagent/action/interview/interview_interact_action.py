@@ -69,6 +69,7 @@ logger = logging.getLogger(__name__)
 # Import registry access functions (decorators are in separate module)
 from .core.foundation.decorators import (
     get_completion_handler as _get_completion_handler,
+    get_confirmation_handler as _get_confirmation_handler,
     get_input_handler as _get_input_handler,
     get_input_validator as _get_input_validator,
     get_input_directive_override as _get_input_directive_override,
@@ -390,6 +391,18 @@ class InterviewInteractAction(InteractAction, ABC):
             Completion handler function if found, None otherwise
         """
         return _get_completion_handler(interview_type)
+
+    @staticmethod
+    def get_confirmation_handler(interview_type: str) -> Optional[Callable]:
+        """Get confirmation handler for an interview type.
+
+        Args:
+            interview_type: Class name of the InterviewInteractAction
+
+        Returns:
+            Confirmation handler function if found, None otherwise
+        """
+        return _get_confirmation_handler(interview_type)
 
     @classmethod
     def get_input_handler(cls, question_name: str) -> Optional[Callable]:

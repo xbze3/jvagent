@@ -664,12 +664,14 @@ class ResolvAPIAction(Action):
         
         if result and 'id' in result:
             for attachment_url in attachments:
-                await self.upload_file_url(
+                url_result = await self.upload_file_url(
                     file_url=attachment_url,
                     entity_id=result['id'],
                     file_type="attachment",
                     entity_type="issue"
                 )
+                logger.warning("URL Result: ")
+                logger.warning(url_result)
             return result
         return {}
 

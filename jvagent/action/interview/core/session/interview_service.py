@@ -128,6 +128,26 @@ class InterviewService:
         # CONFIRMATION: Only valid in REVIEW state - transition to COMPLETED immediately
         if classification_result.intent == Intent.CONFIRMATION and session.state == InterviewState.REVIEW:
             try:
+                # Check for confirmation handler
+                interview_type = session.interview_type
+                confirmation_handler = self.action.get_confirmation_handler(interview_type)
+                
+                if confirmation_handler:
+                    try:
+                        # Call confirmation handler
+                        # Result behavior:
+                        # - True: Fully handled, skip default completion
+                        # - False/None: Proceed to default completion
+                        handled = await confirmation_handler(session, visitor, self.action)
+                        if handled:
+                            logger.info(f"{self.action.get_class_name()}: Confirmation fully handled by custom handler")
+                            await session.save()
+                            return  # Exit early - handler took over
+                    except Exception as e:
+                        logger.error(f"{self.action.get_class_name()}: Confirmation handler failed: {e}", exc_info=True)
+                        # On handler error, proceed with default completion as safety measure
+                
+                # Default logic: transition to COMPLETED
                 state_machine.transition_to(InterviewState.COMPLETED, reason="User confirmation")
                 await session.save()
                 await self.state_handler.generate_completed_directive(session, visitor)

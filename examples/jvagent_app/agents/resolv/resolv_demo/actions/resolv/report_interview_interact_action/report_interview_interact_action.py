@@ -238,8 +238,43 @@ class ReportInterviewInteractAction(InterviewInteractAction):
                     "Branch functions can be registered with @branch_function decorator for complex branching logic."
     )
 
+    # def get_(self):
+    #     model_action = self.get_model_action()
+    #     if not model_action:
+    #         return {}
+
+    #     result_str = model_action.generate(
+    #         prompt=user_input,
+    #         stream=False,
+    #         system=prompt,
+    #         model=self.model,
+    #         temperature=self.model_temperature,
+    #         max_tokens=self.model_max_tokens,
+    #         response_format={"type": "json_object"}
+    #     )
+    #     logger.debug(f"result_str: {result_str}")
+
 
 # Override default directive
+@input_directive_override('incident_location')
+async def custom_continue_directive(
+    field_name: str,
+    value: str,
+    session: InterviewSession,
+    interaction: Interaction,
+    visitor: InteractWalker
+) -> Optional[Union[str, Tuple[str, str]]]:
+    """Custom directive after incident_location is answered."""
+    matching_reports = session.context.get("matching_reports")
+    if matching_reports:
+        report_str = ""
+        for report in matching_reports:
+            report_str += f"___\nReport ID: {report['id']}\n{report['description'][:300]}..."
+        
+        return ("replace", f"Let the user know that you found {len(matching_reports)} reports that match their description. and ask them if they want to continue with the interview. {report_str}")
+    return None  # Use default directive
+
+
 @input_directive_override('continue_report')
 async def custom_continue_directive(
     field_name: str,
@@ -519,7 +554,6 @@ def validate_reporter_address(value: str, session: InterviewSession) -> Tuple[Va
 
 
 
-
 # Branch functions
 @branch_function('detect_sensitive_content')
 def detect_sensitive_content(
@@ -556,18 +590,17 @@ def check_for_similar_incidents(
     session.context['matching_reports'] = [
         {
             "id": "RL2FG12V", 
-            "title": "Pothole repair completed on Main Street",
+            "description": "At a residence in South Ruimveldt, a woman is repeatedly being verbally and physically abused by her partner. Neighbours have heard loud shouting, threats such as “ah gon kill you,” and sounds of slapping and objects being thrown late at night. This has been happening for weeks. People hearing the noise and frighten because this man does lose control. The failure to intervene despite obvious warning signs places the victim at high risk of serious injury or death. Urgent protective action is required.",
         },
         {
             "id": "RL1FG12W", 
-            "title": "Street light installation finished on Oak Avenue",
+            "description": "A deh one house in South Ruimveldt, a woman been gettin cuss out and beat regular by she partner. Neighbours hear plenty loud shouting, serious threats like “ah gon kill you”, an sounds like slap, beat, and tings fling ’bout late night. Dis na one-time thing — dis been goin on fuh weeks now. People round de area frighten because de man does lose control real bad. De fact that nobody ain’t step in yet, even when de signs clear, put de woman life in serious danger. She could get bad hurt or even dead if something ain’t do quick. Immediate action need fuh protect she and stop dis abuse before it turn into something worse.",
         }
     ]
     
     # For demo purposes, always return True to show the flow
     # In production, this would query a database of existing reports
     return True
-
 
 
 
@@ -600,11 +633,15 @@ async def handle_report_completion(
     reporter_address = session.responses.get('reporter_address', '')
 
     # generated data 
-    title = "default title"
+    title = "default title" 
     generated_description = "default generated description"
-    phone_number = "5926431530"
+    reporter_phone = visitor.user_id
     priority = "default report category"
     category_id=1
+    ai_overview = "Incident Report R657224 documents a high-priority safety concern at 47 Main Street, where heavy construction equipment is being operated without proper safety barriers or signage near a public walkway. Reported by Jivas AI Agent for contact ID 395 on 28 January 2026. The absence of required protective measures poses a serious risk of injury to pedestrians and workers. Report remains open."
+
+    import logging
+    logger = logging.getLogger(__name__)
 
     logger.info(f"Incident description: {incident_description}")
     logger.info(f"Incident location: {incident_location}")
@@ -619,11 +656,13 @@ async def handle_report_completion(
     logger.info(f"Reporter phone: {reporter_phone}")
     logger.info(f"AI overview: {ai_overview}")
 
+    
+
     title = "Incident Report: Construction Safety Violation at 47 Main Street"
     is_sensitive = True
     generated_description = "On Monday, 27 January 2026 at approximately 2:15 PM, unsafe working conditions were observed at 47 Main Street. Heavy construction machinery is being operated in close proximity to an unprotected public footpath without installation of safety barriers, warning signs, cones, or flaggers. This violates standard construction safety protocols and creates a high risk of serious injury to passersby, especially vulnerable groups such as children and elderly persons. Immediate intervention and corrective action are strongly recommended to prevent potential accidents and ensure compliance with occupational health and safety regulations."
     incident_description = "Heavy machinery operating unsafely near public walkway without barriers or signage at construction site."
-    incident_media = []
+    # incident_media = []
     priority = "high"
     category_id = 28
     reporting_on_behalf = "yes"
@@ -635,13 +674,12 @@ async def handle_report_completion(
     reporter_phone = "5926431530"
     ai_overview = "Incident Report R657224 documents a high-priority safety concern at 47 Main Street, where heavy construction equipment is being operated without proper safety barriers or signage near a public walkway. Reported by Jivas AI Agent for contact ID 395 on 28 January 2026. The absence of required protective measures poses a serious risk of injury to pedestrians and workers. Report remains open."
 
-    import logging
-    logger = logging.getLogger(__name__)
+    
 
     # resolv_api_action = await visitor.get_action(self.resolv_api_action)
     resolv_api_action = await action.get_action("ResolvAPIAction")
     if resolv_api_action:
-        result = await resolv_api_action.create_issue(
+        result = await resolv_api_action.submit_report(
             title=title,
             is_anonymous=is_sensitive,
             description=generated_description,
@@ -654,11 +692,13 @@ async def handle_report_completion(
             stakeholder_address=stakeholder_address,
             stakeholder_phone=stakeholder_phone,
             reporter_name=reporter_name,
+            reporter_phone=reporter_phone,
             reporter_address=reporter_address,
             ai_overview=ai_overview
         )
         
-        logger.warning("Result: ", result)
+        logger.warning("Result: ")
+        logger.warning(result)
     else:
         logger.warning("Resolv API action not found")
 
