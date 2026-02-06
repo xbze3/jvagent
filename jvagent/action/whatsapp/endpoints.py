@@ -78,6 +78,8 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
         # Parse request data with error handling
         try:
             request_data = await request.json()
+            logger.warning("request_data")
+            logger.warning(request_data)
             data = await whatsapp_action.api().parse_inbound_message(request_data)
         except ValidationError as e:
             logger.debug(f"Validation error parsing WhatsApp webhook request: {e}")
@@ -87,7 +89,7 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
             data = None
 
 
-        # logger.info(f"Received WhatsApp webhook for agent {agent_id}: {data}")
+        # logger.warning(f"Received WhatsApp webhook for agent {agent_id}: {data}")
         
         if not data or data.fromMe:
             return {"status": "received", "response": "Ignore message"}
@@ -107,6 +109,7 @@ async def whatsapp_interact(request: Request, agent_id: str) -> Dict[str, Any]:
             return await _handle_media_message(data, sender, agent_id, whatsapp_action, utterance)
         elif data.message_type in ["ptt"] and data.media:
             voice_result = await _handle_voice_message(data, sender, whatsapp_action)
+            logger.warning(f"Voice result for {sender}: {voice_result}")
             utterance = voice_result.get("transcript", "")
         elif data.message_type in ["location"] and data.location:
             typing_result = await whatsapp_action.api().set_typing_status(phone=sender, value=True, is_group=data.isGroup)

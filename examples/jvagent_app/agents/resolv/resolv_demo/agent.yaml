@@ -14,7 +14,7 @@ actions:
       # Model Configuration
       model_action_type: "OpenAILanguageModelAction"
       history_limit: 3
-      model: gpt-4o
+      model: gpt-4.1-mini
 
   - action: jvagent/openai_embedding
     context:
@@ -82,7 +82,7 @@ actions:
       api_key: ${OPENAI_API_KEY}
       api_endpoint: "https://api.openai.com/v1"
       # Model Configuration
-      model: gpt-4o
+      model: gpt-4.1-mini
       temperature: 0.2
       max_tokens: 4096
       timeout: 60
@@ -105,7 +105,7 @@ actions:
         - "can sign the user up for jvagent training"
       # Model Configuration
       model_action_type: "OpenAILanguageModelAction"
-      model: "gpt-4o"
+      model: "gpt-4.1-mini"
       model_temperature: 0.1
       model_max_tokens: 8192
 
@@ -116,7 +116,7 @@ actions:
       weight: -50
     config:
       model_action_type: "OpenAILanguageModelAction"
-      model: "gpt-4o"
+      model: "gpt-4.1-mini"
       model_temperature: 0.1
       model_max_tokens: 4096
       use_history: true
@@ -131,25 +131,7 @@ actions:
       weight: -50
     config:
       model_action_type: "OpenAILanguageModelAction"
-      model: "gpt-4o"
-      model_temperature: 0.1
-      model_max_tokens: 4096
-      use_history: true
-      max_statement_length: 600
-      history_limit: 4
-      use_dspy: true
-
-  - action: resolv/signup_interview_interact_action
-    context:
-      enabled: true
-      description: "Training signup interview flow for user registration and training scheduling"
-      weight: -50 # Runs after InteractRouter
-      anchors:
-        - "User wants to sign up or register for jvagent training"
-        - "User wants to enroll or join jvagent training"
-    config:
-      model_action_type: "OpenAILanguageModelAction"
-      model: "gpt-4o-mini"
+      model: "gpt-4.1-mini"
       model_temperature: 0.1
       model_max_tokens: 4096
       use_history: true

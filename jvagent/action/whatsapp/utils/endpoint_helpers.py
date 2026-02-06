@@ -368,7 +368,7 @@ async def _handle_voice_message(data: Any, sender: str, whatsapp_action: Any) ->
         Dict with status and optional transcript
     """
     if not whatsapp_action.stt_action:
-        logger.debug(f"No STT action configured for WhatsAppAction, ignoring voice message from {sender}")
+        logger.warning(f"No STT action configured for WhatsAppAction, ignoring voice message from {sender}")
         return {"status": "ignored", "response": "no stt action configured"}
         
     try:
@@ -380,17 +380,17 @@ async def _handle_voice_message(data: Any, sender: str, whatsapp_action: Any) ->
             else:
                 typing_result = await whatsapp_action.api().set_typing_status(phone=sender, value=True, is_group=data.isGroup)
                 if not typing_result.get("ok", True):
-                    logger.debug(
+                    logger.warning(
                         f"Failed to set typing status for {sender}: {typing_result.get('error', 'Unknown error')}"
                     )
         except Exception as e:
-            logger.debug(f"Failed to set recording/typing status for {sender}: {e}")
+            logger.warning(f"Failed to set recording/typing status for {sender}: {e}")
 
         # Retrieve the STT action
         try:
             stt_action = await whatsapp_action.get_action(whatsapp_action.stt_action)
             if not stt_action:
-                logger.debug(f"STT action '{whatsapp_action.stt_action}' not found")
+                logger.warning(f"STT action '{whatsapp_action.stt_action}' not found")
                 return {"status": "ignored", "response": "stt action not found"}
         except Exception as e:
             logger.error(f"Error retrieving STT action: {e}")
@@ -399,16 +399,16 @@ async def _handle_voice_message(data: Any, sender: str, whatsapp_action: Any) ->
         # Transcribe with validation
         try:
             if not data.media:
-                logger.debug(f"No media data in voice message from {sender}")
+                logger.warning(f"No media data in voice message from {sender}")
                 return {"status": "ignored", "response": "no audio data"}
                 
             transcript = await stt_action.invoke_base64(audio_base64=data.media)
             
             if transcript and transcript.strip():
-                logger.debug(f"Transcribed voice message from {sender}: {transcript}")
+                logger.warning(f"Transcribed voice message from {sender}: {transcript}")
                 return {"status": "transcribed", "transcript": transcript}
             else:
-                logger.debug(f"Empty transcript for voice message from {sender}")
+                logger.warning(f"Empty transcript for voice message from {sender}")
                 return {"status": "ignored", "response": "empty transcript"}
                 
         except Exception as e:
@@ -462,7 +462,6 @@ async def _process_interaction_async(
     try:
         # Convert MessagePayload to dict for InteractWalker
         data_dict = _convert_message_payload_to_dict(data)
-        logger.warning("create_whatsapp_walker was called")
 
         # Create walker using helper function
         walker = await create_whatsapp_walker(agent_id, utterance, sender, data_dict, sender_name=sender_name)
